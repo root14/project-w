@@ -1,20 +1,37 @@
-// Import the 'express' module
-import express from 'express';
+import express, { Request, Response, Application } from "express"
+import { PrismaClient } from "@prisma/client"
+import dotenv from "dotenv"
+import authRoute from "./route/auth"
+import verifyJWT from "./middleware/jwtVerify"
 
-// Create an Express application
-const app = express();
+dotenv.config()
 
-// Set the port number for the server
-const port = 3000;
+const app = express()
+export const prisma = new PrismaClient()
 
-// Define a route for the root path ('/')
+const port = process.env.PORT || 3001
+
 app.get('/', (req, res) => {
-  // Send a response to the client
-  res.send('hello');
-});
+    res.send('hello')
+})
 
-// Start the server and listen on the specified port
 app.listen(port, () => {
-  // Log a message when the server is successfully running
-  console.log(`Server is running on http://localhost:${port}`);
-});
+    console.log(`Server is running on http://localhost:${port}`)
+})
+
+async function main() {
+    app.use(express.json())
+    app.use(express.urlencoded({ extended: true }))
+
+    app.use("/api/v1/auth", authRoute)
+    //app.use("/api/v1", verifyJWT, )
+}
+
+main()
+    .then(async () => {
+        await prisma.$connect()
+    }).catch(async (e) => {
+        console.error(e)
+        await prisma.$disconnect()
+        process.exit(1)
+    })

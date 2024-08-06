@@ -9,7 +9,7 @@
     "build": "tsc -p .",
     "db:migrate": "npx prisma migrate dev --name user-entity --create-only && npx prisma generate",
     "db:push": "npx prisma db push",
-    "db:reset":"npx prisma migrate reset"
+    "db:reset": "npx prisma migrate reset"
   },
   "keywords": [],
   "author": "",
@@ -19,10 +19,18 @@
     "@types/express": "^4.17.21",
     "@types/node": "^22.1.0",
     "nodemon": "^3.1.4",
+    "prisma": "^5.18.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.4"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "@prisma/client": "^5.18.0",
+    "@types/bcrypt": "^5.0.2",
+    "@types/jsonwebtoken": "^9.0.6",
+    "bcrypt": "^5.1.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.8.0"
   }
 }
