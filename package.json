@@ -1,0 +1,28 @@
+{
+  "name": "project-w",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node dist/server.js",
+    "dev": "nodemon src/server.ts",
+    "debug": "nodemon -r dotenv/config ./src/server.ts -- --inspect",
+    "build": "tsc -p .",
+    "db:migrate": "npx prisma migrate dev --name user-entity --create-only && npx prisma generate",
+    "db:push": "npx prisma db push",
+    "db:reset":"npx prisma migrate reset"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.1.0",
+    "nodemon": "^3.1.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
