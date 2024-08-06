@@ -19,9 +19,16 @@ const register = async (req: Request, res: Response) => {
                         userName: userName,
                         hashedPassword: hashedPassword
                     },
-                })
+                }).then(() => {
+                    res.status(200).json({ success: true })
+                }).catch((err) => {
+                    if (err.code === "P2002") {
+                        res.status(500).json({ error: "email alread taken." })
+                    } else {
+                        res.status(500).json({ error: err })
+                    }
 
-                res.status(200).json({ success: true });
+                })
             }
         })
     } catch (err) {
