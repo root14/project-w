@@ -27,7 +27,6 @@ const register = async (req: Request, res: Response) => {
                     } else {
                         res.status(500).json({ error: err })
                     }
-
                 })
             }
         })

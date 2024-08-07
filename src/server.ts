@@ -4,10 +4,13 @@ import dotenv from "dotenv"
 import authRoute from "./route/auth"
 import verifyJWT from "./middleware/jwtVerify"
 
+import handleWss from "./controller/wscontroller"
+
 dotenv.config()
 
 const app = express()
 export const prisma = new PrismaClient()
+
 
 const port = process.env.PORT || 3001
 
@@ -25,6 +28,8 @@ async function main() {
 
     app.use("/api/v1/auth", authRoute)
     //app.use("/api/v1", verifyJWT, )
+    handleWss()
+
 }
 
 main()
