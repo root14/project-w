@@ -1,27 +1,36 @@
-import { Server } from "http";
-import WebSocket from "ws";
 import { v4 as uuid } from "uuid"
+import WebSocket from "ws";
 
-const wss = new WebSocket.Server({ port: 3001 })
+const wsPort = process.env.WS_PORT || 3003
 
-async function handleWss() {
+const wsServer = new WebSocket.Server({ port: wsPort as number }, () => {
+    console.log(`ws Server is running on http://localhost:${wsPort}`)
+})
 
-    wss.on('connection', (ws: WebSocket) => {
+const handleWs = () => {
+    wsServer.on("connection", (connection) => {
+        console.log(`Client connected`)
 
-        const userId = uuid()
-
-        console.log(`client connected, id: ${userId}`)
-
-        ws.on('message', (message: string) => {
-            console.log(`recieved message: ${message}`)
-            ws.send(`server received your message: ${message}`)
+        connection.on("error", (error: Error) => {
+            console.log("Connection Error: " + error.message)
         })
 
-        ws.on('close', () => {
-            console.log(`client disconnected, id:${userId}`)
+        connection.on("close", () => {
+            console.log("Client connection closed");
         })
 
+        connection.on("message", (message: string) => {
+            console.log(`Received message: ${message}`)
+        })
+
+        // Send message to client
+        connection.send("Hello my lord!");
     })
+
+    wsServer.on("error", (error: Error) => {
+        console.log("WebSocket server error: " + error.message)
+    })
+
 }
 
-export default handleWss
+export default handleWs
