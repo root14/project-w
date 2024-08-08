@@ -4,7 +4,7 @@ import dotenv from "dotenv"
 import authRoute from "./route/auth"
 import verifyJWT from "./middleware/jwtVerify"
 
-import { connectRedis } from "./data/redishandler"
+import { connectRedis } from "./data/redisConnector"
 import handleWs from "./controller/wscontroller"
 
 dotenv.config()
@@ -22,11 +22,12 @@ async function main() {
     app.use(express.json())
     app.use(express.urlencoded({ extended: true }))
 
+    connectRedis()
+    handleWs()
+
     app.use("/api/v1/auth", authRoute)
     //app.use("/api/v1", verifyJWT, )
 
-   connectRedis()
-    handleWs()
 }
 
 main()
