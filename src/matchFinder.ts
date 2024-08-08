@@ -2,7 +2,7 @@ import { redisClient } from "./data/redisConnector"
 
 async function joinPool(userId: string) {
     //insert user to pool
-    await redisClient.lPush('user-pool', userId)
+    await redisClient.sAdd('user-pool', userId)
     //expire unMathced user
     await redisClient.expire(`user-pool${userId}`, 3600)
 
@@ -11,20 +11,26 @@ async function joinPool(userId: string) {
 async function randomMatch(userId: string) {
     try {
         //limited as a precaution. OutOfMemoryException.
-        const poolUserList = await redisClient.lRange('user-pool', 0, 15)
 
-        const randomIndex = Math.floor(Math.random() * poolUserList.length)
 
-        if (poolUserList[randomIndex] === userId || poolUserList.length < 2) {
-            return "cannot find any match"
+        const cardinality = await redisClient.sCard('user-pool')
+
+        if (cardinality > 2) {
+
+            const poolUserList = await redisClient.sPop('user-pool')
+            if (poolUserList.at(0) === userId) {
+                await redisClient.sAdd('user-pool', userId)
+                return "kendine denk geldin"
+            } else {
+                return poolUserList
+            }
         } else {
-            await redisClient.lRem('user-pool', 1, poolUserList[randomIndex])
-            return poolUserList[randomIndex]
+            return "not enough peope in pool"
         }
 
     } catch (err) {
         console.log(err)
-        return "cannot find any match"
+        return `match finder err ${err}`
     }
 }
 
