@@ -6,6 +6,7 @@ import verifyJWT from "./middleware/jwtVerify"
 
 import { connectRedis } from "./data/redisConnector"
 import handleWs from "./controller/wscontroller"
+import path from "path"
 
 dotenv.config()
 
@@ -25,10 +26,17 @@ async function main() {
     connectRedis()
     handleWs()
 
-
     app.use("/api/v1/auth", authRoute)
     //app.use("/api/v1", verifyJWT, )
 
+     // Public klasöründen statik dosyaları sunma
+     app.use(express.static(path.join(__dirname, 'public')))
+
+     app.use("/api/v1/auth", authRoute)
+ 
+     app.get('/hey', (req: Request, res: Response) => {
+         res.sendFile(path.join(__dirname, 'public', 'index.html'))
+     })
 }
 
 main()
