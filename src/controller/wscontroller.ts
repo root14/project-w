@@ -1,135 +1,121 @@
-import { v4 as uuid } from "uuid";
-import WebSocket from "ws";
-import crypto from "crypto";
-
-import { exitPool, randomMatch } from "../matchFinder";
+import WebSocket from 'ws';
+import crypto from 'crypto';
 
 const wsPort = process.env.WS_PORT || 3003;
-
 const wsServer = new WebSocket.Server({ port: wsPort as number }, () => {
-    console.log(`WebSocket running: ws://localhost:${wsPort}`);
+    console.log(`ws Server is running on http://localhost:${wsPort}`);
 });
 
 const connections = new Map<string, WebSocket>();
 
 const handleWs = () => {
-    wsServer.on("connection", async (connection, request) => {
+    wsServer.on('connection', (connection) => {
         const connectionId = crypto.randomUUID();
-        console.log(`client connected: ${connectionId}`);
+        console.log(`Client connected with ID ${connectionId}`);
+
         connections.set(connectionId, connection);
 
-        connection.on("error", (error: Error) => {
-            console.log("connection error: " + error.message);
+        connection.on('error', (error: Error) => {
+            console.log('Connection Error: ' + error.message);
         });
 
-        connection.on("close", () => {
-            console.log("connection closed: " + connectionId);
+        connection.on('close', () => {
+            console.log(`Client connection with ID ${connectionId} closed`);
             connections.delete(connectionId);
-            exitPool(connectionId);
         });
 
-        connection.on("message", async (message: string) => {
+        connection.on('message', async (message: string) => {
             const { eventType, data } = JSON.parse(message);
 
             switch (eventType) {
                 case 'findMeAMatch':
-                    await handleFindMatch(connectionId, connection);
+                    await handleFindMeAMatch(connectionId, connection);
                     break;
 
                 case 'offer':
-                    await handleOffer(data);
+                    await handleWebRTCMessage('offer', data, connectionId);
                     break;
 
                 case 'answer':
-                    await handleAnswer(data);
+                    await handleWebRTCMessage('answer', data, connectionId);
                     break;
 
                 case 'ice-candidate':
-                    await handleIceCandidate(data);
+                    await handleWebRTCMessage('ice-candidate', data, connectionId);
                     break;
 
                 case 'exitRoom':
-                    exitPool(connectionId);
+                    connections.delete(connectionId);
                     break;
 
                 default:
-                    console.log('unknown eventType:', eventType);
+                    console.log('Unknown event type:', eventType);
                     break;
             }
         });
     });
 
-    wsServer.on("error", (error: Error) => {
-        console.log("WebSocket error: " + error.message);
+    wsServer.on('error', (error: Error) => {
+        console.log('WebSocket server error: ' + error.message);
     });
 };
 
-async function handleFindMatch(connectionId: string, connection: WebSocket) {
-    let matchedUserId = await randomMatch(connectionId);
+async function handleFindMeAMatch(connectionId: string, connection: WebSocket) {
+    const waitingUsers = Array.from(connections.keys());
 
-    if (!matchedUserId) {
-        connection.send(JSON.stringify({
-            eventType: 'match-not-found',
-            result: "match-not-found"
-        }));
-    } else {
-        const matchedConnection = connections.get(matchedUserId[0]);
-        if (matchedConnection) {
-            connection.send(JSON.stringify({
-                eventType: 'match-found',
-                result: "match-found",
-                userId: matchedUserId,
-                yourId: connectionId
-            }));
-            matchedConnection.send(JSON.stringify({
-                eventType: 'match-found',
-                result: "match-found",
-                userId: connectionId,
-                yourId: matchedUserId
-            }));
+    if (waitingUsers.length > 1) {
+        const matchedUserId = waitingUsers.find(id => id !== connectionId);
+
+        if (matchedUserId) {
+            const matchedConnection = connections.get(matchedUserId);
+
+            if (matchedConnection) {
+                connection.send(JSON.stringify({
+                    eventType: 'match-found',
+                    data: {
+                        yourId: connectionId,
+                        matchedUserId: matchedUserId,
+                    }
+                }));
+
+                matchedConnection.send(JSON.stringify({
+                    eventType: 'match-found',
+                    data: {
+                        yourId: matchedUserId,
+                        matchedUserId: connectionId,
+                    }
+                }));
+
+                connections.delete(connectionId);
+                connections.delete(matchedUserId);
+            }
+        } else {
+            connections.set(connectionId, connection);
         }
+    } else {
+        connections.set(connectionId, connection);
     }
 }
 
-async function handleOffer(data: any) {
-    const { targetUserId, sdp } = data;
-    const targetConnection = connections.get(targetUserId);
 
-    if (targetConnection) {
-        targetConnection.send(JSON.stringify({
-            eventType: 'offer',
-            data: { sdp }
-        }));
-    } else {
-        console.log(`target user (${targetUserId}) cannot found.`)
+async function handleWebRTCMessage(type: string, data: any, connectionId: string) {
+    const connection = connections.get(connectionId);
+
+    if (!connection) {
+        console.log(`Connection with ID ${connectionId} not found`);
+        return;
     }
-}
 
-async function handleAnswer(data: any) {
-    const { targetUserId, sdp } = data;
-    const targetConnection = connections.get(targetUserId);
+    switch (type) {
+        case 'offer':
+        case 'answer':
+        case 'ice-candidate':
+            connection.send(JSON.stringify({ eventType: type, data }));
+            break;
 
-    if (targetConnection) {
-        targetConnection.send(JSON.stringify({
-            eventType: 'answer',
-            data: { sdp }
-        }));
-    } else {
-        console.log(`target user (${targetUserId}) cannot found.`)
-    }
-}
-
-async function handleIceCandidate(data: any) {
-    const { targetUserId, candidate } = data;
-    const targetConnection = connections.get(targetUserId);
-
-    if (targetConnection) {
-        targetConnection.send(JSON.stringify({
-            eventType: 'ice-candidate',
-            data: { candidate }
-        }));
-    } else {
-        console.log(`target user (${targetUserId}) cannot found.`)
+        default:
+            console.log('Unknown WebRTC event type:', type);
+            break;
     }
 }
 

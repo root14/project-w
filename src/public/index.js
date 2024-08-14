@@ -1,62 +1,67 @@
-const ws = new WebSocket('ws://localhost:3002')
+const ws = new WebSocket('ws://localhost:3002'); // WebSocket sunucu adresiniz
 
-let peerConnection
-let localStream
-let currentMatchId = null
+let peerConnection;
+let localStream;
+let currentMatchId = null;
 
 ws.onopen = () => {
-    console.log('WebSocket connection open')
+    console.log('WebSocket connection open');
+    ws.send(JSON.stringify({ eventType: 'findMeAMatch' }));
+};
 
-    ws.send(JSON.stringify({ eventType: 'findMeAMatch' }))
-}
-
-// WebSocket mesaj alındığında
 ws.onmessage = async (message) => {
-    const { eventType, result, userId, yourId, sdp, candidate } = JSON.parse(message.data)
+    const { eventType, data } = JSON.parse(message.data);
+
+    // Check if data is defined
+    if (!data) {
+        console.error('Received message with undefined data:', message.data);
+        return;
+    }
 
     switch (eventType) {
         case 'match-found':
-            console.log('match founded:', { userId, yourId })
-            currentMatchId = userId === yourId ? userId : yourId
-            setupPeerConnection(userId, yourId)
-            break
+            console.log('Match found:', data);
+            const { yourId, matchedUserId } = data;
+            currentMatchId = yourId === currentMatchId ? matchedUserId : yourId;
+            setupPeerConnection(currentMatchId);
+            break;
 
         case 'match-not-found':
-            console.log('match-not-found')
-            break
+            console.log('Match not found');
+            break;
 
         case 'offer':
-            await handleOffer(sdp, userId)
-            break
+            await handleOffer(data.sdp);
+            break;
 
         case 'answer':
-            await handleAnswer(sdp)
-            break
+            await handleAnswer(data.sdp);
+            break;
 
         case 'ice-candidate':
-            await handleIceCandidate(candidate)
-            break
+            await handleIceCandidate(data.candidate);
+            break;
 
         default:
-            console.log('unknown eventType:', eventType)
-            break
+            console.log('Unknown event type:', eventType);
+            break;
     }
-}
+};
 
 
 ws.onclose = () => {
-    console.log('WebSocket connection closed')
-}
+    console.log('WebSocket connection closed');
+};
 
 ws.onerror = (error) => {
-    console.log('WebSocket error:', error)
-}
+    console.log('WebSocket error:', error);
+};
 
-async function setupPeerConnection(targetUserId, yourId) {
-    peerConnection = new RTCPeerConnection()
+async function setupPeerConnection(targetUserId) {
+    peerConnection = new RTCPeerConnection();
 
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream))
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
     peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
@@ -66,18 +71,18 @@ async function setupPeerConnection(targetUserId, yourId) {
                     targetUserId,
                     candidate: event.candidate,
                 }
-            }))
+            }));
         }
-    }
+    };
 
     peerConnection.ontrack = (event) => {
-        const remoteStream = new MediaStream()
-        remoteStream.addTrack(event.track)
-        document.getElementById('remoteVideo').srcObject = remoteStream
-    }
+        const remoteStream = new MediaStream();
+        remoteStream.addTrack(event.track);
+        document.getElementById('remoteVideo').srcObject = remoteStream;
+    };
 
-    const offer = await peerConnection.createOffer()
-    await peerConnection.setLocalDescription(offer)
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
 
     ws.send(JSON.stringify({
         eventType: 'offer',
@@ -85,34 +90,34 @@ async function setupPeerConnection(targetUserId, yourId) {
             targetUserId,
             sdp: offer,
         }
-    }))
+    }));
 }
 
-async function handleOffer(sdp, targetUserId) {
-    if (!peerConnection) setupPeerConnection(targetUserId, targetUserId)
+async function handleOffer(sdp) {
+    if (!peerConnection) return;
 
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp))
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
 
-    const answer = await peerConnection.createAnswer()
-    await peerConnection.setLocalDescription(answer)
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
 
     ws.send(JSON.stringify({
         eventType: 'answer',
         data: {
-            targetUserId,
+            targetUserId: currentMatchId,
             sdp: answer,
         }
-    }))
+    }));
 }
 
 async function handleAnswer(sdp) {
     if (peerConnection) {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp))
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
     }
 }
 
 async function handleIceCandidate(candidate) {
     if (peerConnection) {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate))
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
     }
 }
