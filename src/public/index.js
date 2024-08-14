@@ -54,6 +54,9 @@ async function setupPeerConnection(targetUserId, yourId) {
     peerConnection = new RTCPeerConnection();
 
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+
+    document.getElementById('user-1').srcObject = localStream;
+
     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
     peerConnection.onicecandidate = (event) => {
@@ -72,10 +75,7 @@ async function setupPeerConnection(targetUserId, yourId) {
         const remoteStream = new MediaStream();
         remoteStream.addTrack(event.track);
 
-        // Assign the remote stream to the appropriate video element
         if (currentMatchId === targetUserId) {
-            document.getElementById('user-1').srcObject = remoteStream;
-        } else {
             document.getElementById('user-2').srcObject = remoteStream;
         }
     };
