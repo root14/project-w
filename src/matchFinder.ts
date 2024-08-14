@@ -16,10 +16,15 @@ async function randomMatch(userId: string) {
     return poolUser
 }
 
+async function exitPool(userUUID: string) {
+    await redisClient.sRem('user-pool', userUUID)
+    console.log(`userId ${userUUID} removed from redis.`)
+}
+
 function locationBasedMatch(userId: string) { }
 
 export {
-    locationBasedMatch, randomMatch
+    locationBasedMatch, randomMatch, exitPool
 }
 
 
