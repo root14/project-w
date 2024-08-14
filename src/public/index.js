@@ -78,7 +78,13 @@ async function setupPeerConnection(targetUserId) {
     peerConnection.ontrack = (event) => {
         const remoteStream = new MediaStream();
         remoteStream.addTrack(event.track);
-        document.getElementById('remoteVideo').srcObject = remoteStream;
+
+        // Assign the remote stream to the appropriate video element
+        if (currentMatchId === targetUserId) {
+            document.getElementById('user-1').srcObject = remoteStream;
+        } else {
+            document.getElementById('user-2').srcObject = remoteStream;
+        }
     };
 
     const offer = await peerConnection.createOffer();
