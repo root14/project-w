@@ -10,20 +10,13 @@ ws.onopen = () => {
 };
 
 ws.onmessage = async (message) => {
-    const { eventType, data } = JSON.parse(message.data);
-
-    // Check if data is defined
-    if (!data) {
-        console.error('Received message with undefined data:', message.data);
-        return;
-    }
+    const { eventType, result, userId, yourId, sdp, candidate } = JSON.parse(message.data);
 
     switch (eventType) {
         case 'match-found':
-            console.log('Match found:', data);
-            const { yourId, matchedUserId } = data;
-            currentMatchId = yourId === currentMatchId ? matchedUserId : yourId;
-            setupPeerConnection(currentMatchId);
+            console.log('Match found:', { userId, yourId });
+            currentMatchId = userId === yourId ? userId : yourId;
+            setupPeerConnection(userId, yourId);
             break;
 
         case 'match-not-found':
@@ -31,19 +24,19 @@ ws.onmessage = async (message) => {
             break;
 
         case 'offer':
-            await handleOffer(data.sdp);
+            await handleOffer(sdp, userId);
             break;
 
         case 'answer':
-            await handleAnswer(data.sdp);
+            await handleAnswer(sdp);
             break;
 
         case 'ice-candidate':
-            await handleIceCandidate(data.candidate);
+            await handleIceCandidate(candidate);
             break;
 
         default:
-            console.log('Unknown event type:', eventType);
+            console.log('Unknown eventType:', eventType);
             break;
     }
 };
@@ -57,7 +50,7 @@ ws.onerror = (error) => {
     console.log('WebSocket error:', error);
 };
 
-async function setupPeerConnection(targetUserId) {
+async function setupPeerConnection(targetUserId, yourId) {
     peerConnection = new RTCPeerConnection();
 
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -99,8 +92,8 @@ async function setupPeerConnection(targetUserId) {
     }));
 }
 
-async function handleOffer(sdp) {
-    if (!peerConnection) return;
+async function handleOffer(sdp, targetUserId) {
+    if (!peerConnection) setupPeerConnection(targetUserId, targetUserId);
 
     await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
 
@@ -110,7 +103,7 @@ async function handleOffer(sdp) {
     ws.send(JSON.stringify({
         eventType: 'answer',
         data: {
-            targetUserId: currentMatchId,
+            targetUserId,
             sdp: answer,
         }
     }));
