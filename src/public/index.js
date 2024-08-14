@@ -1,160 +1,118 @@
-let localStream
-let remoteStream
-let peerConnection
-
 const ws = new WebSocket('ws://localhost:3002')
 
+let peerConnection
+let localStream
+let currentMatchId = null
+
 ws.onopen = () => {
-    //send msg to join pool/find match
-    ws.send(JSON.stringify({
-        "eventType": "findMeAMatch"
-    }))
+    console.log('WebSocket connection open')
+
+    ws.send(JSON.stringify({ eventType: 'findMeAMatch' }))
 }
 
+// WebSocket mesaj alındığında
+ws.onmessage = async (message) => {
+    const { eventType, result, userId, yourId, sdp, candidate } = JSON.parse(message.data)
 
-ws.onmessage = (event) => {
-    console.log(`gelen response is ${event.data}`)
+    switch (eventType) {
+        case 'match-found':
+            console.log('match founded:', { userId, yourId })
+            currentMatchId = userId === yourId ? userId : yourId
+            setupPeerConnection(userId, yourId)
+            break
 
+        case 'match-not-found':
+            console.log('match-not-found')
+            break
+
+        case 'offer':
+            await handleOffer(sdp, userId)
+            break
+
+        case 'answer':
+            await handleAnswer(sdp)
+            break
+
+        case 'ice-candidate':
+            await handleIceCandidate(candidate)
+            break
+
+        default:
+            console.log('unknown eventType:', eventType)
+            break
+    }
 }
+
 
 ws.onclose = () => {
-    ws.send(JSON.stringify({
-        eventType: "exitRoom"
-    }))
-    console.log("client connection close")
+    console.log('WebSocket connection closed')
 }
 
-
-/*
-const servers = {
-    iceServers: [
-        {
-            urls: [
-                'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:stun3.l.google.com:19302'
-            ]
-        }
-    ]
+ws.onerror = (error) => {
+    console.log('WebSocket error:', error)
 }
 
-let constraints = {
-    video: {
-        width: { min: 640, ideal: 1920, max: 1920 },
-        height: { min: 480, ideal: 1080, max: 1080 },
-    },
-    audio: true
-}
+async function setupPeerConnection(targetUserId, yourId) {
+    peerConnection = new RTCPeerConnection()
 
-let init = async () => {
-    client = await AgoraRTM.createInstance(APP_ID)
-    await client.login({ uid, token })
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream))
 
-    channel = client.createChannel(roomId)
-    await channel.join()
-
-    channel.on('MemberJoined', handleUserJoined)
-    channel.on('MemberLeft', handleUserLeft)
-
-    client.on('MessageFromPeer', handleMessageFromPeer)
-
-    localStream = await navigator.mediaDevices.getUserMedia(constraints)
-    document.getElementById('user-1').srcObject = localStream
-}
-
-
-let handleUserLeft = (MemberId) => {
-    document.getElementById('user-2').style.display = 'none'
-    document.getElementById('user-1').classList.remove('smallFrame')
-}
-
-let handleMessageFromPeer = async (message, MemberId) => {
-
-    message = JSON.parse(message.text)
-
-    if (message.type === 'offer') {
-        createAnswer(MemberId, message.offer)
-    }
-
-    if (message.type === 'answer') {
-        addAnswer(message.answer)
-    }
-
-    if (message.type === 'candidate') {
-        if (peerConnection) {
-            peerConnection.addIceCandidate(message.candidate)
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+            ws.send(JSON.stringify({
+                eventType: 'ice-candidate',
+                data: {
+                    targetUserId,
+                    candidate: event.candidate,
+                }
+            }))
         }
     }
-
-
-}
-
-let handleUserJoined = async (MemberId) => {
-    console.log('A new user joined the channel:', MemberId)
-    createOffer(MemberId)
-}
-
-
-let createPeerConnection = async (MemberId) => {
-    peerConnection = new RTCPeerConnection(servers)
-
-    remoteStream = new MediaStream()
-    document.getElementById('user-2').srcObject = remoteStream
-    document.getElementById('user-2').style.display = 'block'
-
-    document.getElementById('user-1').classList.add('smallFrame')
-
-
-    if (!localStream) {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-        document.getElementById('user-1').srcObject = localStream
-    }
-
-    localStream.getTracks().forEach((track) => {
-        peerConnection.addTrack(track, localStream)
-    })
 
     peerConnection.ontrack = (event) => {
-        event.streams[0].getTracks().forEach((track) => {
-            remoteStream.addTrack(track)
-        })
+        const remoteStream = new MediaStream()
+        remoteStream.addTrack(event.track)
+        document.getElementById('remoteVideo').srcObject = remoteStream
     }
 
-    peerConnection.onicecandidate = async (event) => {
-        if (event.candidate) {
-            client.sendMessageToPeer({ text: JSON.stringify({ 'type': 'candidate', 'candidate': event.candidate }) }, MemberId)
-        }
-    }
-}
-
-let createOffer = async (MemberId) => {
-    await createPeerConnection(MemberId)
-
-    let offer = await peerConnection.createOffer()
+    const offer = await peerConnection.createOffer()
     await peerConnection.setLocalDescription(offer)
 
-    client.sendMessageToPeer({ text: JSON.stringify({ 'type': 'offer', 'offer': offer }) }, MemberId)
+    ws.send(JSON.stringify({
+        eventType: 'offer',
+        data: {
+            targetUserId,
+            sdp: offer,
+        }
+    }))
 }
 
+async function handleOffer(sdp, targetUserId) {
+    if (!peerConnection) setupPeerConnection(targetUserId, targetUserId)
 
-let createAnswer = async (MemberId, offer) => {
-    await createPeerConnection(MemberId)
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp))
 
-    await peerConnection.setRemoteDescription(offer)
-
-    let answer = await peerConnection.createAnswer()
+    const answer = await peerConnection.createAnswer()
     await peerConnection.setLocalDescription(answer)
 
-    client.sendMessageToPeer({ text: JSON.stringify({ 'type': 'answer', 'answer': answer }) }, MemberId)
+    ws.send(JSON.stringify({
+        eventType: 'answer',
+        data: {
+            targetUserId,
+            sdp: answer,
+        }
+    }))
 }
 
-
-let addAnswer = async (answer) => {
-    if (!peerConnection.currentRemoteDescription) {
-        peerConnection.setRemoteDescription(answer)
+async function handleAnswer(sdp) {
+    if (peerConnection) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp))
     }
 }
 
-
-let leaveChannel = async () => {
-    await channel.leave()
-    await client.logout()
-}*/
+async function handleIceCandidate(candidate) {
+    if (peerConnection) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate))
+    }
+}

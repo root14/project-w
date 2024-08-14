@@ -1,85 +1,136 @@
-import { v4 as uuid, v4 } from "uuid"
+import { v4 as uuid } from "uuid";
 import WebSocket from "ws";
+import crypto from "crypto";
 
-import { jwtValidate } from "../util/jwtValidate"
 import { exitPool, randomMatch } from "../matchFinder";
 
-const wsPort = process.env.WS_PORT || 3003
+const wsPort = process.env.WS_PORT || 3003;
 
 const wsServer = new WebSocket.Server({ port: wsPort as number }, () => {
-    console.log(`ws Server is running on http://localhost:${wsPort}`)
-})
+    console.log(`WebSocket running: ws://localhost:${wsPort}`);
+});
+
+const connections = new Map<string, WebSocket>();
 
 const handleWs = () => {
     wsServer.on("connection", async (connection, request) => {
-        const connectionId = crypto.randomUUID()
-        console.log(`Client connected`)
-
-
-        /*if (!jwtValidate(request.headers.authorization || "")) {
-            //cannot validate jwt
-            console.log("cannot validate jwt for a user")
-            connection.send("cannot validate your jwt")
-            connection.close()
-            return
-        }*/
+        const connectionId = crypto.randomUUID();
+        console.log(`client connected: ${connectionId}`);
+        connections.set(connectionId, connection);
 
         connection.on("error", (error: Error) => {
-            console.log("Connection Error: " + error.message)
-        })
+            console.log("connection error: " + error.message);
+        });
 
         connection.on("close", () => {
-            console.log("Client connection closed");
-            exitPool(connectionId)
-        })
+            console.log("connection closed: " + connectionId);
+            connections.delete(connectionId);
+            exitPool(connectionId);
+        });
 
         connection.on("message", async (message: string) => {
-            const { eventType } = JSON.parse(message)
+            const { eventType, data } = JSON.parse(message);
 
             switch (eventType) {
-                case "findMeAMatch":
-                    let findedUserId = await randomMatch(connectionId)
-
-                    if (!findedUserId) {
-
-                        connection.send(JSON.stringify("match not found"))
-                    } else {
-
-                        connection.send(JSON.stringify({
-                            result: "match found.",
-                            userId: findedUserId
-                        }))
-                    }
+                case 'findMeAMatch':
+                    await handleFindMatch(connectionId, connection);
                     break;
 
-                case "exitRoom":
-                    exitPool(connectionId)
+                case 'offer':
+                    await handleOffer(data);
+                    break;
+
+                case 'answer':
+                    await handleAnswer(data);
+                    break;
+
+                case 'ice-candidate':
+                    await handleIceCandidate(data);
+                    break;
+
+                case 'exitRoom':
+                    exitPool(connectionId);
                     break;
 
                 default:
-                    console.log("default")
+                    console.log('unknown eventType:', eventType);
                     break;
             }
-
-
-            /**  await setInterval(async () => {
-                  randomMatch(userId).then((result) => {
-                      console.log(`result is ${result}`)
-                      if (result instanceof String) {
-                          findedUser = result
-                      }
- 
-                  })
-              }, 5000) */
-
-
-            //console.log(`finded user is ${findedUser}`)
-        })
-    })
+        });
+    });
 
     wsServer.on("error", (error: Error) => {
-        console.log("WebSocket server error: " + error.message)
-    })
+        console.log("WebSocket error: " + error.message);
+    });
+};
+
+async function handleFindMatch(connectionId: string, connection: WebSocket) {
+    let matchedUserId = await randomMatch(connectionId);
+
+    if (!matchedUserId) {
+        connection.send(JSON.stringify({
+            eventType: 'match-not-found',
+            result: "match-not-found"
+        }));
+    } else {
+        const matchedConnection = connections.get(matchedUserId[0]);
+        if (matchedConnection) {
+            connection.send(JSON.stringify({
+                eventType: 'match-found',
+                result: "match-found",
+                userId: matchedUserId,
+                yourId: connectionId
+            }));
+            matchedConnection.send(JSON.stringify({
+                eventType: 'match-found',
+                result: "match-found",
+                userId: connectionId,
+                yourId: matchedUserId
+            }));
+        }
+    }
 }
 
-export default handleWs
+async function handleOffer(data: any) {
+    const { targetUserId, sdp } = data;
+    const targetConnection = connections.get(targetUserId);
+
+    if (targetConnection) {
+        targetConnection.send(JSON.stringify({
+            eventType: 'offer',
+            data: { sdp }
+        }));
+    } else {
+        console.log(`target user (${targetUserId}) cannot found.`)
+    }
+}
+
+async function handleAnswer(data: any) {
+    const { targetUserId, sdp } = data;
+    const targetConnection = connections.get(targetUserId);
+
+    if (targetConnection) {
+        targetConnection.send(JSON.stringify({
+            eventType: 'answer',
+            data: { sdp }
+        }));
+    } else {
+        console.log(`target user (${targetUserId}) cannot found.`)
+    }
+}
+
+async function handleIceCandidate(data: any) {
+    const { targetUserId, candidate } = data;
+    const targetConnection = connections.get(targetUserId);
+
+    if (targetConnection) {
+        targetConnection.send(JSON.stringify({
+            eventType: 'ice-candidate',
+            data: { candidate }
+        }));
+    } else {
+        console.log(`target user (${targetUserId}) cannot found.`)
+    }
+}
+
+export default handleWs;
