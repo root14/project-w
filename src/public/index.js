@@ -1,122 +1,81 @@
-const ws = new WebSocket('ws://localhost:3002'); // WebSocket sunucu adresiniz
+import { io } from "https://cdn.socket.io/4.7.5/socket.io.esm.min.js";
+
+const socket = io.connect("http://localhost:3001")
+
+
+const localVideo = document.getElementById('user-1');
+const remoteVideo = document.getElementById('user-2');
+
+navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    .then((stream) => {
+        localVideo.srcObject = stream;
+    })
+    .catch((error) => {
+        console.error('Error accessing media devices.', error);
+    });
+
 
 let peerConnection;
-let localStream;
-let currentMatchId = null;
 
-ws.onopen = () => {
-    console.log('WebSocket connection open');
-    ws.send(JSON.stringify({ eventType: 'findMeAMatch' }));
-};
+function createPeerConnection() {
+    const config = {
+        iceServers: [
+            {
+                urls: 'stun:stun.l.google.com:19302' // Google's public STUN server
+            }
+        ]
+    };
 
-ws.onmessage = async (message) => {
-    const { eventType, result, userId, yourId, sdp, candidate } = JSON.parse(message.data);
+    peerConnection = new RTCPeerConnection(config);
 
-    switch (eventType) {
-        case 'match-found':
-            console.log('Match found:', { userId, yourId });
-            currentMatchId = userId === yourId ? userId : yourId;
-            setupPeerConnection(userId, yourId);
-            break;
-
-        case 'match-not-found':
-            console.log('Match not found');
-            break;
-
-        case 'offer':
-            await handleOffer(sdp, userId);
-            break;
-
-        case 'answer':
-            await handleAnswer(sdp);
-            break;
-
-        case 'ice-candidate':
-            await handleIceCandidate(candidate);
-            break;
-
-        default:
-            console.log('Unknown eventType:', eventType);
-            break;
-    }
-};
-
-
-ws.onclose = () => {
-    console.log('WebSocket connection closed');
-};
-
-ws.onerror = (error) => {
-    console.log('WebSocket error:', error);
-};
-
-async function setupPeerConnection(targetUserId, yourId) {
-    peerConnection = new RTCPeerConnection();
-
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-
-    document.getElementById('user-1').srcObject = localStream;
-
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
+    // Handle ICE candidates
     peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
-            ws.send(JSON.stringify({
-                eventType: 'ice-candidate',
-                data: {
-                    targetUserId,
-                    candidate: event.candidate,
-                }
-            }));
+            socket.emit('ice candidate', event.candidate, roomId);
         }
     };
 
+    // Handle remote video stream
     peerConnection.ontrack = (event) => {
-        const remoteStream = new MediaStream();
-        remoteStream.addTrack(event.track);
-
-        if (currentMatchId === targetUserId) {
-            document.getElementById('user-2').srcObject = remoteStream;
-        }
+        remoteVideo.srcObject = event.streams[0];
     };
 
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
-
-    ws.send(JSON.stringify({
-        eventType: 'offer',
-        data: {
-            targetUserId,
-            sdp: offer,
-        }
-    }));
+    // Add local stream to peer connection
+    const localStream = localVideo.srcObject;
+    for (const track of localStream.getTracks()) {
+        peerConnection.addTrack(track, localStream);
+    }
 }
 
-async function handleOffer(sdp, targetUserId) {
-    if (!peerConnection) setupPeerConnection(targetUserId, targetUserId);
+socket.on('joinedRoom', async (data) => {
+    const { roomId } = JSON.parse(data)
 
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+    const offer = await peerConnection.createOffer()
+    await peerConnection.setLocalDescription(offer)
 
+    socket.to(roomId).emit('offer', offer, roomId)
+})
+
+socket.on('offer', async (offer) => {
+    if (!peerConnection) {
+        createPeerConnection();
+    }
+
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
 
-    ws.send(JSON.stringify({
-        eventType: 'answer',
-        data: {
-            targetUserId,
-            sdp: answer,
-        }
-    }));
-}
+    socket.emit('answer', answer, roomId);
+});
 
-async function handleAnswer(sdp) {
-    if (peerConnection) {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
-    }
-}
+socket.on('answer', async (answer) => {
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+});
 
-async function handleIceCandidate(candidate) {
-    if (peerConnection) {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+socket.on('ice candidate', async (candidate) => {
+    try {
+        await peerConnection.addIceCandidate(candidate);
+    } catch (error) {
+        console.error('Error adding received ice candidate', error);
     }
-}
+});
