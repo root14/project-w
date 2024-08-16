@@ -1,6 +1,6 @@
 import { io } from "https://cdn.socket.io/4.7.5/socket.io.esm.min.js";
 
-const socket = io.connect("http://localhost:3001")
+const socket = io.connect("http://localhost:3000")
 
 
 const localVideo = document.getElementById('user-1');
@@ -16,12 +16,13 @@ navigator.mediaDevices.getUserMedia({ video: true, audio: true })
 
 
 let peerConnection;
+let localRoomId
 
 function createPeerConnection() {
     const config = {
         iceServers: [
             {
-                urls: 'stun:stun.l.google.com:19302' // Google's public STUN server
+                urls: 'stun:stun.l.google.com:19302'
             }
         ]
     };
@@ -31,7 +32,7 @@ function createPeerConnection() {
     // Handle ICE candidates
     peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
-            socket.emit('ice candidate', event.candidate, roomId);
+            socket.emit('ice candidate', event.candidate, localRoomId);
         }
     };
 
@@ -48,23 +49,29 @@ function createPeerConnection() {
 }
 
 socket.on('joinedRoom', async (data) => {
-    const { roomId } = JSON.parse(data)
+    const { roomId } = data
 
-    const offer = await peerConnection.createOffer()
-    await peerConnection.setLocalDescription(offer)
+    console.log(`joined room ${roomId}`)
 
-    socket.to(roomId).emit('offer', offer, roomId)
+    //createPeerConnection()
+    //const offer = await peerConnection.createOffer()
+    //await peerConnection.setLocalDescription(offer)
+
+    //socket.to(roomId).emit('offer', offer, roomId)
+    //socket.emit('offer', offer, roomId)
 })
 
-socket.on('offer', async (offer) => {
+socket.on('offer', async (roomId) => {
     if (!peerConnection) {
         createPeerConnection();
     }
 
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+    let offer1 = await peerConnection.createOffer()
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer1));
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
 
+    localRoomId = roomId
     socket.emit('answer', answer, roomId);
 });
 

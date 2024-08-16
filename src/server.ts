@@ -11,13 +11,13 @@ import handleSocketConnections from './controller/socketController';
 
 dotenv.config()
 
+const port = process.env.PORT || 3001
+
 const app = express()
-const server = app.listen(3001)
+const server = app.listen(port)
 
 export const prisma = new PrismaClient()
 export const io = new Server(server)
-
-const port = process.env.PORT || 3001
 
 /*
 app.listen(port, () => {
