@@ -11,13 +11,11 @@ function handleSocketConnections() {
 
         //someone waiting
         if (waitingRoom.length > 0) {
-            const roomId = waitingRoom.pop()
+            const waitingId = waitingRoom.pop()
 
-            socket.join(roomId!)
+            socket.emit("MemberJoined", { peerId: waitingId, yourId: socket.id })
 
-            socket.to(roomId!).emit("offer", { roomId: roomId })
-            console.log(`some one waiting joined to room. roomId -> ${roomId}`)
-
+            console.log("memberjoined room")
         } else {
             //nobody
             waitingRoom.push(socket.id)
@@ -25,21 +23,17 @@ function handleSocketConnections() {
             console.log(`no one waiting joined room -> ${socket.id}`)
         }
 
-        socket.on('offer', (roomId) => {
-            socket.to(roomId).emit('offer', roomId);
-            console.log(`offer room id -> ${roomId}`)
+
+        socket.on("MessageFromPeer", async function (data) {
+            const from = data.from
+            const to = data.to
+            const message = data.message
+
+            //message can be json
+            io.to(to).emit("MessageFromPeer", { from: from, to: to, data: message })
+            //console.log(`messagefrompeer ${message}`)
         })
 
-        socket.on('answer', (answer, roomId) => {
-            socket.to(roomId).emit('answer', answer);
-            console.log(`offer room id -> ${roomId} answer ->${answer}`)
-        })
-
-        socket.on('ice candidate', (candidate, roomId) => {
-            const localRoomId: string = roomId
-            socket.to(roomId).emit('ice candidate', candidate);
-            console.log(`ice candidate room id -> ${localRoomId} candidate ->${candidate}`)
-        })
 
         socket.on('disconnect', () => {
             console.log('User disconnected:', socket.id);
