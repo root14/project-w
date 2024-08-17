@@ -17,7 +17,6 @@ const servers = {
     ]
 }
 
-
 let constraints = {
     video: {
         width: { min: 640, ideal: 1920, max: 1920 },
@@ -26,16 +25,10 @@ let constraints = {
     audio: true
 }
 
-
 async function init() {
     localStream = await navigator.mediaDevices.getUserMedia(constraints)
     document.getElementById('user-1').srcObject = localStream
 }
-
-//console.log(`member joined roomId ${data.roomId}`)
-
-//const message = JSON.stringify({ message: "sample data" })
-//socket.emit("MessageFromPeer", { to: peerId, from: yourId, message })
 
 init()
 
@@ -43,8 +36,6 @@ socket.on('MemberJoined', async function (data) {
     peerId = data.peerId
     yourId = data.yourId
 
-
-    console.log(`createOffer calisti ${yourId}`)
     createOffer(yourId)
 })
 
@@ -52,33 +43,22 @@ socket.on("MessageFromPeer", async function (data) {
     peerId = data.from
     yourId = data.to
 
-    console.log(`gelen peerId ${peerId}`)
-    console.log(`gelen yourId ${yourId}`)
-    console.log(`gelen messsage ${data.data}`)
-
     handleMessageFromPeer(data.data, peerId)
 })
 
 async function handleMessageFromPeer(data, id) {
-
-    //message = JSON.parse(message)
-
     const result = JSON.parse(data)
-    console.log(`handleMessageFromPeer ->${result.type}`)
 
     if (result.type === 'offer') {
-        console.log(`createAnswer calisti`)
         createAnswer(id, result.offer)
     }
 
     if (result.type === 'answer') {
-        console.log(`addAnswer calisti`)
         addAnswer(result.answer)
     }
 
     if (result.type === 'candidate') {
         if (peerConnection) {
-            console.log(`addIceCandidate calisti`)
             peerConnection.addIceCandidate(result.candidate)
         }
     }
