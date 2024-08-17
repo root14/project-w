@@ -3,40 +3,42 @@ import { PrismaClient } from "@prisma/client"
 import dotenv from "dotenv"
 import authRoute from "./route/auth"
 import verifyJWT from "./middleware/jwtVerify"
+import * as http from "http"
 
-import { connectRedis } from "./data/redisConnector"
-import handleWs from "./controller/wscontroller"
 import path from "path"
+import { Server } from "socket.io"
+import handleSocketConnections from './controller/socketController';
 
 dotenv.config()
 
-const app = express()
-export const prisma = new PrismaClient()
-
 const port = process.env.PORT || 3001
 
+const app = express()
+const server = app.listen(port)
+
+export const prisma = new PrismaClient()
+export const io = new Server(server)
+
+/*
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`)
-})
+})*/
 
 async function main() {
     app.use(express.json())
     app.use(express.urlencoded({ extended: true }))
 
-    connectRedis()
-    handleWs()
-
     app.use("/api/v1/auth", authRoute)
     //app.use("/api/v1", verifyJWT, )
 
-     // Public klasöründen statik dosyaları sunma
-     app.use(express.static(path.join(__dirname, 'public')))
+    app.use(express.static(path.join(__dirname, 'public')))
 
-     app.use("/api/v1/auth", authRoute)
- 
-     app.get('/hey', (req: Request, res: Response) => {
-         res.sendFile(path.join(__dirname, 'public', 'index.html'))
-     })
+    app.get('/hey', (req: Request, res: Response) => {
+        res.sendFile(path.join(__dirname, 'public', 'index.html'))
+    })
+
+    handleSocketConnections()
+
 }
 
 main()
