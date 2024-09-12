@@ -1,6 +1,7 @@
 import { io } from "https://cdn.socket.io/4.7.5/socket.io.esm.min.js";
 
-const socket = io.connect("http://localhost:3000")
+//const socket = io.connect("http://localhost:3000")
+const socket = io.connect("https://leopard-clever-amazingly.ngrok-free.app")
 
 let peerId
 let yourId
@@ -47,19 +48,23 @@ socket.on("MessageFromPeer", async function (data) {
 })
 
 async function handleMessageFromPeer(data, id) {
+
+    //message = JSON.parse(message)
+
     const result = JSON.parse(data)
+    console.log(`handleMessageFromPeer ->${result.type}`)
 
     if (result.type === 'offer') {
-        createAnswer(id, result.offer)
+        createAnswer(id, result.data)
     }
 
     if (result.type === 'answer') {
-        addAnswer(result.answer)
+        addAnswer(result.data)
     }
 
     if (result.type === 'candidate') {
         if (peerConnection) {
-            peerConnection.addIceCandidate(result.candidate)
+            peerConnection.addIceCandidate(result.data)
         }
     }
 }
@@ -73,7 +78,7 @@ let createAnswer = async (MemberId, offer) => {
     let answer = await peerConnection.createAnswer()
     await peerConnection.setLocalDescription(answer)
 
-    const message = JSON.stringify({ "type": "answer", "answer": answer })
+    const message = JSON.stringify({ "type": "answer", "data": answer })
     socket.emit("MessageFromPeer", { to: peerId, from: yourId, message: message })
 }
 
@@ -83,7 +88,7 @@ let createOffer = async (MemberId) => {
     let offer = await peerConnection.createOffer()
     await peerConnection.setLocalDescription(offer)
 
-    const message = JSON.stringify({ "type": "offer", "offer": offer })
+    const message = JSON.stringify({ "type": "offer", "data": offer })
     socket.emit("MessageFromPeer", { to: peerId, from: yourId, message: message })
 }
 
@@ -121,7 +126,7 @@ let createPeerConnection = async (MemberId) => {
     peerConnection.onicecandidate = async (event) => {
         if (event.candidate) {
 
-            const message = JSON.stringify({ "type": "candidate", "candidate": event.candidate })
+            const message = JSON.stringify({ "type": "candidate", "data": event.candidate })
             socket.emit("MessageFromPeer", { to: peerId, from: yourId, message: message })
         }
     }

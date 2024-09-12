@@ -5,7 +5,6 @@ const waitingRoom = new Array<string>()
 
 function handleSocketConnections() {
 
-
     io.on('connection', (socket) => {
         console.log('A user connected:', socket.id);
 
@@ -34,6 +33,10 @@ function handleSocketConnections() {
             //console.log(`messagefrompeer ${message}`)
         })
 
+        socket.on("echo", async function (data) {
+            io.emit("echo", { from: "from", to: "to", data: "message" })
+            console.log(data)
+        })
 
         socket.on('disconnect', () => {
             console.log('User disconnected:', socket.id);
